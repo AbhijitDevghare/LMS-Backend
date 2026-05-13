@@ -76,6 +76,7 @@ export const createCourse = async (
     next
 ) => {
     try {
+        console.log("COURSE")
         const {
             title,
             description,
@@ -83,6 +84,7 @@ export const createCourse = async (
             createdBy,
         } = req.body;
 
+        console.log(req.body)
         if (
             !title ||
             !description ||
@@ -116,12 +118,14 @@ export const createCourse = async (
                         "image"
                     );
 
+                    console.log("STREAM RESULT : ",result)
                 newCourse.thumbnail.public_id =
                     result.public_id;
 
                 newCourse.thumbnail.secure_url =
                     result.secure_url;
             } catch (error) {
+                console.log("STREAM RESULT : ",error)
                 return next(
                     createError(
                         500,
@@ -142,6 +146,7 @@ export const createCourse = async (
             newCourse,
         });
     } catch (error) {
+        console.log("err",error)
         return next(
             createError(500, error.message)
         );

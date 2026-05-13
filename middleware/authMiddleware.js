@@ -4,7 +4,7 @@ import User from '../models/userModel.js'
 
 export const isLoggedIn = async (req, res, next) => {
     const { token } = req.cookies
-
+    console.log(token)
     if (!token) {
         return next(createError(401, "Please log in again"))
     }
@@ -15,6 +15,7 @@ export const isLoggedIn = async (req, res, next) => {
 }
 
 export const authorizedRole = (...rols) => async (req, res, next) => {
+    console.log(req.user)
     const currentUserRole = req.user.role
     if (!rols.includes(currentUserRole)) {
         return next(createError(403, "You do not have permission"))

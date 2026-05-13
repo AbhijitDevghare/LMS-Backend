@@ -11,6 +11,7 @@ const upload = multer({
 
     fileFilter: (_req, file, cb) => {
         const ext = path.extname(file.originalname).toLowerCase();
+            console.log("THUMBNAIL")
 
         if (
             ext !== ".jpg" &&
