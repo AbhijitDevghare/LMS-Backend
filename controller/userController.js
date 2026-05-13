@@ -116,16 +116,13 @@ export const signup = async (req, res, next) => {
         const token =
             await user.generateToken();
 
-        res.cookie("token", token, {
-            httpOnly: true,
-            maxAge:
-                7 *
-                24 *
-                60 *
-                60 *
-                1000,
-        });
-
+            res.cookie("token", token, {
+                httpOnly: true,
+                secure: true,
+                sameSite: "none",
+                maxAge:
+                    7 * 24 * 60 * 60 * 1000,
+            });
         res.status(201).json({
             success: true,
             message:
@@ -193,14 +190,11 @@ export const login = async (
 
         res.cookie("token", token, {
             httpOnly: true,
+            secure: true,
+            sameSite: "none",
             maxAge:
-                7 *
-                24 *
-                60 *
-                60 *
-                1000,
+                7 * 24 * 60 * 60 * 1000,
         });
-
         res.status(200).json({
             success: true,
             message: `Welcome back ${userData.name}`,
