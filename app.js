@@ -21,10 +21,6 @@ dotenv.config();
 
 const app = express();
 
-
-import { connectDb } from "./database/db.js";
-connectDb();
-
 export const myCache = new NodeCache();
 
 app.use(cookieParser());
