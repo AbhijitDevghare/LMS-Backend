@@ -1,4 +1,4 @@
-import cloudinary from "cloudinary";
+import cloudinary from "../config/cloudinary.js";
 import streamifier from "streamifier";
 
 import Submission from "../models/submissionModel.js";
@@ -8,7 +8,7 @@ import createError from "../utils/error.js";
 const streamUpload = (buffer) => {
     return new Promise((resolve, reject) => {
         const stream =
-            cloudinary.v2.uploader.upload_stream(
+            cloudinary.uploader.upload_stream(
                 {
                     resource_type: "auto",
                     folder: "lms_submissions",

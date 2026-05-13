@@ -1,4 +1,4 @@
-import cloudinary from "cloudinary";
+import cloudinary from "../config/cloudinary.js";
 import streamifier from "streamifier";
 
 import Assignment from "../models/assignmentModel.js";
@@ -6,18 +6,21 @@ import createError from "../utils/error.js";
 
 const streamUpload = (buffer) => {
     return new Promise((resolve, reject) => {
-        const stream = cloudinary.v2.uploader.upload_stream(
-            {
-                resource_type: "auto",
-                folder: "lms_assignments",
-            },
-            (error, result) => {
-                if (error) reject(error);
-                else resolve(result);
-            }
-        );
+        const stream =
+            cloudinary.uploader.upload_stream(
+                {
+                    resource_type: "auto",
+                    folder: "lms_assignments",
+                },
+                (error, result) => {
+                    if (error) reject(error);
+                    else resolve(result);
+                }
+            );
 
-        streamifier.createReadStream(buffer).pipe(stream);
+        streamifier
+            .createReadStream(buffer)
+            .pipe(stream);
     });
 };
 
@@ -53,13 +56,17 @@ export const createAssignment = async (
 
         if (req.files?.length > 0) {
             for (const file of req.files) {
-                const result = await streamUpload(
-                    file.buffer
-                );
+                const result =
+                    await streamUpload(
+                        file.buffer
+                    );
 
                 attachments.push({
-                    public_id: result.public_id,
-                    secure_url: result.secure_url,
+                    public_id:
+                        result.public_id,
+
+                    secure_url:
+                        result.secure_url,
                 });
             }
         }
@@ -72,7 +79,8 @@ export const createAssignment = async (
                 dueDate,
                 totalMarks,
                 attachments,
-                createdBy: req.user.id,
+                createdBy:
+                    req.user.id,
             });
 
         res.status(201).json({
@@ -88,126 +96,156 @@ export const createAssignment = async (
     }
 };
 
-export const getCourseAssignments = async (
-    req,
-    res,
-    next
-) => {
-    try {
-        const { courseId } = req.params;
+export const getCourseAssignments =
+    async (
+        req,
+        res,
+        next
+    ) => {
+        try {
+            const { courseId } =
+                req.params;
 
-        const assignments =
-            await Assignment.find({
-                course: courseId,
-                isDeleted: false,
-            }).sort({ createdAt: -1 });
+            const assignments =
+                await Assignment.find({
+                    course:
+                        courseId,
 
-        res.status(200).json({
-            success: true,
-            assignments,
-        });
-    } catch (error) {
-        return next(
-            createError(500, error.message)
-        );
-    }
-};
+                    isDeleted:
+                        false,
+                }).sort({
+                    createdAt: -1,
+                });
 
-export const updateAssignment = async (
-    req,
-    res,
-    next
-) => {
-    try {
-        const { id } = req.params;
-
-        const assignment =
-            await Assignment.findById(id);
-
-        if (!assignment) {
+            res.status(200).json({
+                success: true,
+                assignments,
+            });
+        } catch (error) {
             return next(
                 createError(
-                    404,
-                    "Assignment not found"
+                    500,
+                    error.message
                 )
             );
         }
+    };
 
-        let attachments =
-            assignment.attachments || [];
+export const updateAssignment =
+    async (
+        req,
+        res,
+        next
+    ) => {
+        try {
+            const { id } =
+                req.params;
 
-        if (req.files?.length > 0) {
-            attachments = [];
-
-            for (const file of req.files) {
-                const result = await streamUpload(
-                    file.buffer
+            const assignment =
+                await Assignment.findById(
+                    id
                 );
 
-                attachments.push({
-                    public_id: result.public_id,
-                    secure_url: result.secure_url,
-                });
+            if (!assignment) {
+                return next(
+                    createError(
+                        404,
+                        "Assignment not found"
+                    )
+                );
             }
-        }
 
-        Object.keys(req.body).forEach(
-            (key) => {
-                assignment[key] =
-                    req.body[key];
+            let attachments =
+                assignment.attachments ||
+                [];
+
+            if (req.files?.length > 0) {
+                attachments = [];
+
+                for (const file of req.files) {
+                    const result =
+                        await streamUpload(
+                            file.buffer
+                        );
+
+                    attachments.push({
+                        public_id:
+                            result.public_id,
+
+                        secure_url:
+                            result.secure_url,
+                    });
+                }
             }
-        );
 
-        assignment.attachments =
-            attachments;
+            Object.keys(req.body).forEach(
+                (key) => {
+                    assignment[key] =
+                        req.body[key];
+                }
+            );
 
-        await assignment.save();
+            assignment.attachments =
+                attachments;
 
-        res.status(200).json({
-            success: true,
-            message:
-                "Assignment updated successfully",
-            assignment,
-        });
-    } catch (error) {
-        return next(
-            createError(500, error.message)
-        );
-    }
-};
+            await assignment.save();
 
-export const deleteAssignment = async (
-    req,
-    res,
-    next
-) => {
-    try {
-        const { id } = req.params;
-
-        const assignment =
-            await Assignment.findById(id);
-
-        if (!assignment) {
+            res.status(200).json({
+                success: true,
+                message:
+                    "Assignment updated successfully",
+                assignment,
+            });
+        } catch (error) {
             return next(
                 createError(
-                    404,
-                    "Assignment not found"
+                    500,
+                    error.message
                 )
             );
         }
+    };
 
-        assignment.isDeleted = true;
+export const deleteAssignment =
+    async (
+        req,
+        res,
+        next
+    ) => {
+        try {
+            const { id } =
+                req.params;
 
-        await assignment.save();
+            const assignment =
+                await Assignment.findById(
+                    id
+                );
 
-        res.status(200).json({
-            success: true,
-            message:
-                "Assignment deleted successfully",
-        });
-    } catch (error) {
-        return next(
-            createError(500, error.message)
-        );
-    }
-};
+            if (!assignment) {
+                return next(
+                    createError(
+                        404,
+                        "Assignment not found"
+                    )
+                );
+            }
+
+            assignment.isDeleted =
+                true;
+
+            await assignment.save();
+
+            res.status(200).json({
+                success: true,
+                message:
+                    "Assignment deleted successfully",
+            });
+        } catch (error) {
+            return next(
+                createError(
+                    500,
+                    error.message
+                )
+            );
+        }
+    };

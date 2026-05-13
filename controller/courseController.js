@@ -1,6 +1,6 @@
 import Course from '../models/courseModel.js';
 import createError from '../utils/error.js';
-import { v2 } from 'cloudinary';
+import cloudinary from "../config/cloudinary.js";
 import streamifier from 'streamifier';
 import { myCache } from '../app.js';
 
@@ -9,16 +9,17 @@ const streamUpload = (
     resource_type = "image"
 ) => {
     return new Promise((resolve, reject) => {
-        const stream = v2.uploader.upload_stream(
-            {
-                resource_type,
-                folder: 'lms',
-            },
-            (error, result) => {
-                if (error) reject(error);
-                else resolve(result);
-            }
-        );
+        const stream =
+            cloudinary.uploader.upload_stream(
+                {
+                    resource_type,
+                    folder: 'lms',
+                },
+                (error, result) => {
+                    if (error) reject(error);
+                    else resolve(result);
+                }
+            );
 
         streamifier
             .createReadStream(buffer)
@@ -107,24 +108,6 @@ export const createCourse = async (
             },
         });
 
-        try {
-            await newCourse.validate();
-        } catch (error) {
-            const validationErrors = [];
-
-            for (const key in error.errors) {
-                validationErrors.push(
-                    error.errors[key].message
-                );
-            }
-
-            return res.status(400).json({
-                success: false,
-                message:
-                    validationErrors.join(', '),
-            });
-        }
-
         if (req.file) {
             try {
                 const result =
@@ -133,19 +116,16 @@ export const createCourse = async (
                         "image"
                     );
 
-                if (result) {
-                    newCourse.thumbnail.public_id =
-                        result.public_id;
+                newCourse.thumbnail.public_id =
+                    result.public_id;
 
-                    newCourse.thumbnail.secure_url =
-                        result.secure_url;
-                }
+                newCourse.thumbnail.secure_url =
+                    result.secure_url;
             } catch (error) {
                 return next(
                     createError(
                         500,
-                        error.message ||
-                        "file upload failed"
+                        error.message
                     )
                 );
             }
@@ -177,16 +157,7 @@ export const updateCourse = async (
         const { id } = req.params;
 
         const course =
-            await Course.findByIdAndUpdate(
-                id,
-                {
-                    $set: req.body,
-                },
-                {
-                    runValidators: true,
-                    new: true,
-                }
-            );
+            await Course.findById(id);
 
         if (!course) {
             return next(
@@ -197,12 +168,20 @@ export const updateCourse = async (
             );
         }
 
+        Object.keys(req.body).forEach(
+            (key) => {
+                course[key] =
+                    req.body[key];
+            }
+        );
+
         if (req.file) {
             try {
-                await v2.uploader.destroy(
+                await cloudinary.uploader.destroy(
                     course.thumbnail.public_id,
                     {
-                        resource_type: 'image',
+                        resource_type:
+                            'image',
                     }
                 );
 
@@ -212,19 +191,16 @@ export const updateCourse = async (
                         "image"
                     );
 
-                if (result) {
-                    course.thumbnail.public_id =
-                        result.public_id;
+                course.thumbnail.public_id =
+                    result.public_id;
 
-                    course.thumbnail.secure_url =
-                        result.secure_url;
-                }
+                course.thumbnail.secure_url =
+                    result.secure_url;
             } catch (error) {
                 return next(
                     createError(
                         500,
-                        error.message ||
-                        "file upload failed"
+                        error.message
                     )
                 );
             }
@@ -267,10 +243,11 @@ export const deleteCourse = async (
             );
         }
 
-        await v2.uploader.destroy(
+        await cloudinary.uploader.destroy(
             course.thumbnail.public_id,
             {
-                resource_type: 'image',
+                resource_type:
+                    'image',
             }
         );
 
@@ -323,7 +300,7 @@ export const getLectures = async (
             );
         }
 
-        return res.status(200).json({
+        res.status(200).json({
             success: true,
             message:
                 "Lectures fetched successfully",
@@ -348,19 +325,8 @@ export const addLecturesToCourse =
                 description,
             } = req.body;
 
-            if (
-                !title ||
-                !description
-            ) {
-                return next(
-                    createError(
-                        400,
-                        "Please enter all input fields"
-                    )
-                );
-            }
-
-            const { id } = req.params;
+            const { id } =
+                req.params;
 
             const course =
                 await Course.findById(id);
@@ -384,29 +350,17 @@ export const addLecturesToCourse =
             };
 
             if (req.file) {
-                try {
-                    const result =
-                        await streamUpload(
-                            req.file.buffer,
-                            "video"
-                        );
-
-                    if (result) {
-                        lectureData.lecture.public_id =
-                            result.public_id;
-
-                        lectureData.lecture.secure_url =
-                            result.secure_url;
-                    }
-                } catch (error) {
-                    return next(
-                        createError(
-                            500,
-                            error.message ||
-                            "file upload failed"
-                        )
+                const result =
+                    await streamUpload(
+                        req.file.buffer,
+                        "video"
                     );
-                }
+
+                lectureData.lecture.public_id =
+                    result.public_id;
+
+                lectureData.lecture.secure_url =
+                    result.secure_url;
             }
 
             course.lectures.push(
@@ -423,16 +377,13 @@ export const addLecturesToCourse =
             res.status(200).json({
                 success: true,
                 message:
-                    "lectures add successfully",
+                    "Lecture added successfully",
                 lectures:
                     course.lectures,
             });
         } catch (error) {
             return next(
-                createError(
-                    500,
-                    error.message
-                )
+                createError(500, error.message)
             );
         }
     };
@@ -487,39 +438,28 @@ export const updateLectures = async (
         }
 
         if (req.file) {
-            try {
-                await v2.uploader.destroy(
-                    lectureToUpdate
-                        .lecture.public_id,
-                    {
-                        resource_type: 'video',
-                    }
-                );
-
-                const result =
-                    await streamUpload(
-                        req.file.buffer,
-                        "video"
-                    );
-
-                if (result) {
-                    lectureToUpdate
-                        .lecture.public_id =
-                        result.public_id;
-
-                    lectureToUpdate
-                        .lecture.secure_url =
-                        result.secure_url;
+            await cloudinary.uploader.destroy(
+                lectureToUpdate
+                    .lecture.public_id,
+                {
+                    resource_type:
+                        'video',
                 }
-            } catch (error) {
-                return next(
-                    createError(
-                        500,
-                        error.message ||
-                        "file upload failed"
-                    )
+            );
+
+            const result =
+                await streamUpload(
+                    req.file.buffer,
+                    "video"
                 );
-            }
+
+            lectureToUpdate
+                .lecture.public_id =
+                result.public_id;
+
+            lectureToUpdate
+                .lecture.secure_url =
+                result.secure_url;
         }
 
         await course.save();
@@ -530,7 +470,8 @@ export const updateLectures = async (
             success: true,
             message:
                 "Lecture updated successfully",
-            course: course.lectures,
+            course:
+                course.lectures,
         });
     } catch (error) {
         return next(
@@ -578,12 +519,13 @@ export const deleteLectures = async (
             );
         }
 
-        await v2.uploader.destroy(
+        await cloudinary.uploader.destroy(
             course.lectures[
                 lectureIndex
             ].lecture.public_id,
             {
-                resource_type: 'video',
+                resource_type:
+                    'video',
             }
         );
 

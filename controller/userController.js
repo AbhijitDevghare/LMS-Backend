@@ -1,14 +1,14 @@
 import createError from "../utils/error.js";
 import User from "../models/userModel.js";
 import bcryptjs from "bcryptjs";
-import { v2 } from "cloudinary";
+import cloudinary from "../config/cloudinary.js";
 import streamifier from "streamifier";
 import sendMail from "../utils/sendMail.js";
 import crypto from "crypto";
 
 const streamUpload = (buffer) => {
     return new Promise((resolve, reject) => {
-        const stream = v2.uploader.upload_stream(
+        const stream = cloudinary.uploader.upload_stream(
             {
                 resource_type: "image",
                 folder: "lms",
@@ -29,23 +29,11 @@ const streamUpload = (buffer) => {
     });
 };
 
-export const signup = async (
-    req,
-    res,
-    next
-) => {
+export const signup = async (req, res, next) => {
     try {
-        const {
-            name,
-            email,
-            password,
-        } = req.body;
+        const { name, email, password } = req.body;
 
-        if (
-            !name ||
-            !email ||
-            !password
-        ) {
+        if (!name || !email || !password) {
             return next(
                 createError(
                     401,
@@ -54,16 +42,14 @@ export const signup = async (
             );
         }
 
-        const userExists =
-            await User.findOne({
-                email,
-            });
+        const userExists = await User.findOne({
+            email,
+        });
 
         if (userExists) {
             return res.status(401).json({
                 success: false,
-                message:
-                    "Email already exists",
+                message: "Email already exists",
             });
         }
 
@@ -85,8 +71,7 @@ export const signup = async (
 
             for (const key in error.errors) {
                 validationErrors.push(
-                    error.errors[key]
-                        .message
+                    error.errors[key].message
                 );
             }
 
@@ -118,7 +103,7 @@ export const signup = async (
                     createError(
                         500,
                         error.message ||
-                        "file not uploaded , please try again"
+                        "file not uploaded"
                     )
                 );
             }
@@ -160,10 +145,8 @@ export const login = async (
     next
 ) => {
     try {
-        const {
-            email,
-            password,
-        } = req.body;
+        const { email, password } =
+            req.body;
 
         if (!email || !password) {
             return next(
@@ -183,7 +166,7 @@ export const login = async (
             return next(
                 createError(
                     404,
-                    "User with this email is not found"
+                    "User not found"
                 )
             );
         }
@@ -244,7 +227,7 @@ export const logout = (
         res.status(200).json({
             success: true,
             message:
-                "User log out Successfully",
+                "User logout successfully",
         });
     } catch (error) {
         return next(
@@ -259,14 +242,12 @@ export const getProfile = async (
     next
 ) => {
     try {
-        const userId = req.user.id;
-
-        const user =
-            await User.findById(userId);
+        const user = await User.findById(
+            req.user.id
+        );
 
         res.status(200).json({
             success: true,
-            message: "User details",
             user,
         });
     } catch (error) {
@@ -282,47 +263,48 @@ export const forgotPassword =
         res,
         next
     ) => {
-        const { email } = req.body;
-
-        if (!email) {
-            return next(
-                createError(
-                    400,
-                    "Email is required"
-                )
-            );
-        }
-
-        const user =
-            await User.findOne({
-                email,
-            });
-
-        if (!user) {
-            return next(
-                createError(
-                    404,
-                    "User with this email is not found"
-                )
-            );
-        }
-
-        const resetToken =
-            await user.generateResetToken();
-
-        await user.save();
-
-        const resetPasswordUrl =
-            `${process.env.FRONTEND_URL}/reset-password/${resetToken}`;
-
-        const subject =
-            "Reset Password";
-
-        const message = `You can reset your password by clicking <a href="${encodeURI(
-            resetPasswordUrl
-        )}" target="_blank">Reset your password</a>.`;
-
         try {
+            const { email } = req.body;
+
+            if (!email) {
+                return next(
+                    createError(
+                        400,
+                        "Email is required"
+                    )
+                );
+            }
+
+            const user =
+                await User.findOne({
+                    email,
+                });
+
+            if (!user) {
+                return next(
+                    createError(
+                        404,
+                        "User not found"
+                    )
+                );
+            }
+
+            const resetToken =
+                await user.generateResetToken();
+
+            await user.save();
+
+            const resetPasswordUrl =
+                `${process.env.FRONTEND_URL}/reset-password/${resetToken}`;
+
+            const subject =
+                "Reset Password";
+
+            const message = `
+                Click below to reset password:
+                ${resetPasswordUrl}
+            `;
+
             await sendMail(
                 process.env.GMAIL_ID,
                 email,
@@ -332,19 +314,12 @@ export const forgotPassword =
 
             res.status(200).json({
                 success: true,
-                message: `Reset password email has been sent to ${email} successfully`,
+                message:
+                    "Reset password mail sent",
             });
         } catch (error) {
-            user.forgotPasswordToken =
-                undefined;
-
-            user.forgotPasswordExpiry =
-                undefined;
-
-            await user.save();
-
             return next(
-                createError(500, error)
+                createError(500, error.message)
             );
         }
     };
@@ -371,16 +346,16 @@ export const resetPassword = async (
             await User.findOne({
                 forgotPasswordToken,
                 forgotPasswordExpiry:
-                {
-                    $gt: Date.now(),
-                },
+                    {
+                        $gt: Date.now(),
+                    },
             });
 
         if (!user) {
             return next(
                 createError(
                     400,
-                    "Token is invalid or expired"
+                    "Token invalid or expired"
                 )
             );
         }
@@ -398,7 +373,7 @@ export const resetPassword = async (
         res.status(200).json({
             success: true,
             message:
-                "password reset successfully",
+                "Password reset successfully",
         });
     } catch (error) {
         return next(
@@ -418,60 +393,43 @@ export const changePassword = async (
             newPassword,
         } = req.body;
 
-        const userId = req.user.id;
-
-        if (
-            !oldPassword ||
-            !newPassword
-        ) {
-            return next(
-                createError(
-                    404,
-                    "All fields are required"
-                )
-            );
-        }
-
         const user =
             await User.findById(
-                userId
+                req.user.id
             ).select("+password");
 
         if (!user) {
             return next(
                 createError(
-                    400,
-                    "user does not exist"
+                    404,
+                    "User not found"
                 )
             );
         }
 
-        const comparePassword =
+        const isMatch =
             await bcryptjs.compare(
                 oldPassword,
                 user.password
             );
 
-        if (!comparePassword) {
+        if (!isMatch) {
             return next(
                 createError(
                     401,
-                    "Invalid old password"
+                    "Old password incorrect"
                 )
             );
         }
 
-        user.password =
-            newPassword;
+        user.password = newPassword;
 
         await user.save();
-
-        user.password = undefined;
 
         res.status(200).json({
             success: true,
             message:
-                "password changed successfully",
+                "Password changed successfully",
         });
     } catch (error) {
         return next(
@@ -488,33 +446,26 @@ export const updateProfile = async (
     try {
         const { name } = req.body;
 
-        const userId = req.user.id;
-
         const user =
-            await User.findById(userId);
-
-        if (!name) {
-            return next(
-                createError(
-                    400,
-                    "name is required"
-                )
+            await User.findById(
+                req.user.id
             );
-        }
 
         if (!user) {
             return next(
                 createError(
-                    400,
-                    "user does not exist"
+                    404,
+                    "User not found"
                 )
             );
         }
 
-        user.name = name;
+        if (name) {
+            user.name = name;
+        }
 
         if (req.file) {
-            await v2.uploader.destroy(
+            await cloudinary.uploader.destroy(
                 user.avatar.public_id,
                 {
                     resource_type:
@@ -522,28 +473,16 @@ export const updateProfile = async (
                 }
             );
 
-            try {
-                const result =
-                    await streamUpload(
-                        req.file.buffer
-                    );
-
-                if (result) {
-                    user.avatar.public_id =
-                        result.public_id;
-
-                    user.avatar.secure_url =
-                        result.secure_url;
-                }
-            } catch (error) {
-                return next(
-                    createError(
-                        500,
-                        error.message ||
-                        "file not uploaded"
-                    )
+            const result =
+                await streamUpload(
+                    req.file.buffer
                 );
-            }
+
+            user.avatar.public_id =
+                result.public_id;
+
+            user.avatar.secure_url =
+                result.secure_url;
         }
 
         await user.save();
@@ -551,7 +490,7 @@ export const updateProfile = async (
         res.status(200).json({
             success: true,
             message:
-                "profile updated successfully",
+                "Profile updated successfully",
         });
     } catch (error) {
         return next(
@@ -566,23 +505,21 @@ export const deleteProfile = async (
     next
 ) => {
     try {
-        const userId = req.user.id;
-
         const user =
             await User.findByIdAndDelete(
-                userId
+                req.user.id
             );
 
         if (!user) {
             return next(
                 createError(
-                    400,
-                    "user does not exist"
+                    404,
+                    "User not found"
                 )
             );
         }
 
-        await v2.uploader.destroy(
+        await cloudinary.uploader.destroy(
             user.avatar.public_id,
             {
                 resource_type:
@@ -593,7 +530,7 @@ export const deleteProfile = async (
         res.status(200).json({
             success: true,
             message:
-                "profile deleted successfully",
+                "Profile deleted successfully",
         });
     } catch (error) {
         return next(
