@@ -1,27 +1,38 @@
-// controllers/assignmentController.js
-
-import fs from "fs";
-
 import cloudinary from "cloudinary";
+import streamifier from "streamifier";
 
 import Assignment from "../models/assignmentModel.js";
-
 import createError from "../utils/error.js";
+
+const streamUpload = (buffer) => {
+    return new Promise((resolve, reject) => {
+        const stream = cloudinary.v2.uploader.upload_stream(
+            {
+                resource_type: "auto",
+                folder: "lms_assignments",
+            },
+            (error, result) => {
+                if (error) reject(error);
+                else resolve(result);
+            }
+        );
+
+        streamifier.createReadStream(buffer).pipe(stream);
+    });
+};
 
 export const createAssignment = async (
     req,
     res,
     next
 ) => {
-
     try {
-
         const {
             course,
             title,
             description,
             dueDate,
-            totalMarks
+            totalMarks,
         } = req.body;
 
         if (
@@ -30,75 +41,51 @@ export const createAssignment = async (
             !description ||
             !dueDate
         ) {
-
             return next(
                 createError(
                     400,
                     "All fields are required"
                 )
             );
-
         }
 
         let attachments = [];
 
         if (req.files?.length > 0) {
-
             for (const file of req.files) {
-
-                const result =
-                    await cloudinary.v2.uploader.upload(
-                        file.path,
-                        {
-                            resource_type: "auto",
-                            folder: "lms_assignments"
-                        }
-                    );
+                const result = await streamUpload(
+                    file.buffer
+                );
 
                 attachments.push({
-
                     public_id: result.public_id,
-
-                    secure_url: result.secure_url
-
+                    secure_url: result.secure_url,
                 });
-
-                fs.rmSync(file.path);
-
             }
-
         }
 
         const assignment =
             await Assignment.create({
-
                 course,
                 title,
                 description,
                 dueDate,
                 totalMarks,
                 attachments,
-                createdBy: req.user.id
-
+                createdBy: req.user.id,
             });
 
         res.status(201).json({
-
             success: true,
             message:
                 "Assignment created successfully",
-            assignment
-
+            assignment,
         });
-
     } catch (error) {
-
         return next(
             createError(500, error.message)
         );
-
     }
-
 };
 
 export const getCourseAssignments = async (
@@ -106,34 +93,24 @@ export const getCourseAssignments = async (
     res,
     next
 ) => {
-
     try {
-
         const { courseId } = req.params;
 
         const assignments =
             await Assignment.find({
-
                 course: courseId,
-                isDeleted: false
-
+                isDeleted: false,
             }).sort({ createdAt: -1 });
 
         res.status(200).json({
-
             success: true,
-            assignments
-
+            assignments,
         });
-
     } catch (error) {
-
         return next(
             createError(500, error.message)
         );
-
     }
-
 };
 
 export const updateAssignment = async (
@@ -141,63 +118,43 @@ export const updateAssignment = async (
     res,
     next
 ) => {
-
     try {
-
         const { id } = req.params;
 
         const assignment =
             await Assignment.findById(id);
 
         if (!assignment) {
-
             return next(
                 createError(
                     404,
                     "Assignment not found"
                 )
             );
-
         }
 
         let attachments =
             assignment.attachments || [];
 
         if (req.files?.length > 0) {
-
             attachments = [];
 
             for (const file of req.files) {
-
-                const result =
-                    await cloudinary.v2.uploader.upload(
-                        file.path,
-                        {
-                            resource_type: "auto",
-                            folder: "lms_assignments"
-                        }
-                    );
+                const result = await streamUpload(
+                    file.buffer
+                );
 
                 attachments.push({
-
                     public_id: result.public_id,
-
-                    secure_url: result.secure_url
-
+                    secure_url: result.secure_url,
                 });
-
-                fs.rmSync(file.path);
-
             }
-
         }
 
         Object.keys(req.body).forEach(
             (key) => {
-
                 assignment[key] =
                     req.body[key];
-
             }
         );
 
@@ -207,22 +164,16 @@ export const updateAssignment = async (
         await assignment.save();
 
         res.status(200).json({
-
             success: true,
             message:
                 "Assignment updated successfully",
-            assignment
-
+            assignment,
         });
-
     } catch (error) {
-
         return next(
             createError(500, error.message)
         );
-
     }
-
 };
 
 export const deleteAssignment = async (
@@ -230,23 +181,19 @@ export const deleteAssignment = async (
     res,
     next
 ) => {
-
     try {
-
         const { id } = req.params;
 
         const assignment =
             await Assignment.findById(id);
 
         if (!assignment) {
-
             return next(
                 createError(
                     404,
                     "Assignment not found"
                 )
             );
-
         }
 
         assignment.isDeleted = true;
@@ -254,19 +201,13 @@ export const deleteAssignment = async (
         await assignment.save();
 
         res.status(200).json({
-
             success: true,
             message:
-                "Assignment deleted successfully"
-
+                "Assignment deleted successfully",
         });
-
     } catch (error) {
-
         return next(
             createError(500, error.message)
         );
-
     }
-
 };

@@ -1,29 +1,41 @@
-// controllers/submissionController.js
-
-import fs from "fs";
-
 import cloudinary from "cloudinary";
+import streamifier from "streamifier";
 
 import Submission from "../models/submissionModel.js";
-
 import Assignment from "../models/assignmentModel.js";
-
 import createError from "../utils/error.js";
+
+const streamUpload = (buffer) => {
+    return new Promise((resolve, reject) => {
+        const stream =
+            cloudinary.v2.uploader.upload_stream(
+                {
+                    resource_type: "auto",
+                    folder: "lms_submissions",
+                },
+                (error, result) => {
+                    if (error) reject(error);
+                    else resolve(result);
+                }
+            );
+
+        streamifier
+            .createReadStream(buffer)
+            .pipe(stream);
+    });
+};
 
 export const submitAssignment = async (
     req,
     res,
     next
 ) => {
-
     try {
-
         const { assignmentId } =
             req.params;
 
-        const {
-            submissionText
-        } = req.body;
+        const { submissionText } =
+            req.body;
 
         const assignment =
             await Assignment.findById(
@@ -31,33 +43,27 @@ export const submitAssignment = async (
             );
 
         if (!assignment) {
-
             return next(
                 createError(
                     404,
                     "Assignment not found"
                 )
             );
-
         }
 
         const alreadySubmitted =
             await Submission.findOne({
-
                 assignment: assignmentId,
-                student: req.user.id
-
+                student: req.user.id,
             });
 
         if (alreadySubmitted) {
-
             return next(
                 createError(
                     400,
                     "Assignment already submitted"
                 )
             );
-
         }
 
         let status = "pending";
@@ -68,45 +74,30 @@ export const submitAssignment = async (
                 assignment.dueDate
             )
         ) {
-
             status = "late";
-
         }
 
         let uploadedFiles = [];
 
         if (req.files?.length > 0) {
-
             for (const file of req.files) {
-
                 const result =
-                    await cloudinary.v2.uploader.upload(
-                        file.path,
-                        {
-                            resource_type: "auto",
-                            folder: "lms_submissions"
-                        }
+                    await streamUpload(
+                        file.buffer
                     );
 
                 uploadedFiles.push({
-
                     public_id:
                         result.public_id,
 
                     secure_url:
-                        result.secure_url
-
+                        result.secure_url,
                 });
-
-                fs.rmSync(file.path);
-
             }
-
         }
 
         const submission =
             await Submission.create({
-
                 assignment:
                     assignmentId,
 
@@ -118,28 +109,21 @@ export const submitAssignment = async (
                 files:
                     uploadedFiles,
 
-                status
-
+                status,
             });
 
         res.status(201).json({
-
             success: true,
             message:
                 "Assignment submitted successfully",
 
-            submission
-
+            submission,
         });
-
     } catch (error) {
-
         return next(
             createError(500, error.message)
         );
-
     }
-
 };
 
 export const getAssignmentSubmissions =
@@ -148,48 +132,37 @@ export const getAssignmentSubmissions =
         res,
         next
     ) => {
-
         try {
-
-            const {
-                assignmentId
-            } = req.params;
+            const { assignmentId } =
+                req.params;
 
             const submissions =
                 await Submission.find({
-
                     assignment:
                         assignmentId,
 
-                    isDeleted: false
-
+                    isDeleted: false,
                 })
                     .populate(
                         "student",
                         "name email"
                     )
                     .sort({
-                        createdAt: -1
+                        createdAt: -1,
                     });
 
             res.status(200).json({
-
                 success: true,
-                submissions
-
+                submissions,
             });
-
         } catch (error) {
-
             return next(
                 createError(
                     500,
                     error.message
                 )
             );
-
         }
-
     };
 
 export const gradeSubmission =
@@ -198,16 +171,13 @@ export const gradeSubmission =
         res,
         next
     ) => {
-
         try {
-
-            const {
-                submissionId
-            } = req.params;
+            const { submissionId } =
+                req.params;
 
             const {
                 marks,
-                feedback
+                feedback,
             } = req.body;
 
             const submission =
@@ -216,14 +186,12 @@ export const gradeSubmission =
                 );
 
             if (!submission) {
-
                 return next(
                     createError(
                         404,
                         "Submission not found"
                     )
                 );
-
             }
 
             submission.marks =
@@ -238,26 +206,20 @@ export const gradeSubmission =
             await submission.save();
 
             res.status(200).json({
-
                 success: true,
                 message:
                     "Submission graded successfully",
 
-                submission
-
+                submission,
             });
-
         } catch (error) {
-
             return next(
                 createError(
                     500,
                     error.message
                 )
             );
-
         }
-
     };
 
 export const getStudentSubmissions =
@@ -266,41 +228,31 @@ export const getStudentSubmissions =
         res,
         next
     ) => {
-
         try {
-
             const submissions =
                 await Submission.find({
-
                     student:
                         req.user.id,
 
-                    isDeleted: false
-
+                    isDeleted: false,
                 })
                     .populate(
                         "assignment"
                     )
                     .sort({
-                        createdAt: -1
+                        createdAt: -1,
                     });
 
             res.status(200).json({
-
                 success: true,
-                submissions
-
+                submissions,
             });
-
         } catch (error) {
-
             return next(
                 createError(
                     500,
                     error.message
                 )
             );
-
         }
-
     };
