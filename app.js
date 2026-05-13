@@ -1,5 +1,7 @@
 import express from "express";
 import dns from "node:dns/promises";
+dns.setServers(["1.1.1.1", "8.8.8.8"]);
+
 import dotenv from "dotenv";
 import cors from "cors";
 import cookieParser from "cookie-parser";
@@ -15,7 +17,7 @@ import submissionRoutes from "./routes/submissionRoutes.js";
 
 import errorMiddleware from "./middleware/errorMiddleware.js";
 
-dns.setServers(["1.1.1.1", "8.8.8.8"]);
+
 
 dotenv.config();
 
