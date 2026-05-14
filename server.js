@@ -11,25 +11,19 @@ const PORT =
 
 await connectDb();
 
-if (
-    process.env.NODE_ENV !== "production"
-) {
+const server = app.listen(
+    PORT,
+    () => {
 
-    const server = app.listen(
-        PORT,
-        () => {
+        console.log(
+            `Server running on port ${PORT}`
+        );
 
-            console.log(
-                `Server running on port ${PORT}`
-            );
+    }
+);
 
-        }
-    );
-
-    // 10 MINUTES TIMEOUT
-    server.timeout =
-        10 * 60 * 1000;
-
-}
+// 10 MINUTES TIMEOUT
+server.timeout =
+    10 * 60 * 1000;
 
 export default app;
