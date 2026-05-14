@@ -14,20 +14,46 @@ if (!fs.existsSync(uploadPath)) {
 
 const storage = multer.diskStorage({
 
-    destination: function (_req, _file, cb) {
+    destination: function (
+        _req,
+        _file,
+        cb
+    ) {
 
-        cb(null, uploadPath);
+        cb(
+            null,
+            uploadPath
+        );
 
     },
 
-    filename: function (_req, file, cb) {
+    filename: function (
+        _req,
+        file,
+        cb
+    ) {
 
-        const uniqueName =
+        const ext =
+            path.extname(
+                file.originalname
+            );
+
+        const safeName =
+
             Date.now() +
-            "-" +
-            file.originalname;
 
-        cb(null, uniqueName);
+            "-" +
+
+            Math.round(
+                Math.random() * 1E9
+            ) +
+
+            ext;
+
+        cb(
+            null,
+            safeName
+        );
 
     }
 
@@ -81,7 +107,10 @@ const upload = multer({
 
             }
 
-            cb(null, true);
+            cb(
+                null,
+                true
+            );
 
         }
 

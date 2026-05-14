@@ -1,104 +1,154 @@
+// userController.js
+
+import fs from "fs";
+
 import createError from "../utils/error.js";
+
 import User from "../models/userModel.js";
+
 import bcryptjs from "bcryptjs";
+
 import cloudinary from "../config/cloudinary.js";
-import streamifier from "streamifier";
+
 import sendMail from "../utils/sendMail.js";
+
 import crypto from "crypto";
 
-const streamUpload = (buffer) => {
-    return new Promise((resolve, reject) => {
-        const stream = cloudinary.uploader.upload_stream(
-            {
-                resource_type: "image",
-                folder: "lms",
-                width: 250,
-                height: 250,
-                gravity: "faces",
-                crop: "fill",
-            },
-            (error, result) => {
-                if (error) reject(error);
-                else resolve(result);
-            }
-        );
+/* IMAGE UPLOAD */
+const uploadImage = async (
+    filePath
+) => {
 
-        streamifier
-            .createReadStream(buffer)
-            .pipe(stream);
-    });
+    return await cloudinary.uploader.upload(
+        filePath,
+        {
+            resource_type: "image",
+            folder: "lms",
+            width: 250,
+            height: 250,
+            gravity: "faces",
+            crop: "fill",
+        }
+    );
+
 };
 
-export const signup = async (req, res, next) => {
-    try {
-        const { name, email, password } = req.body;
+export const signup = async (
+    req,
+    res,
+    next
+) => {
 
-        if (!name || !email || !password) {
+    try {
+
+        const {
+            name,
+            email,
+            password
+        } = req.body;
+
+        if (
+            !name ||
+            !email ||
+            !password
+        ) {
+
             return next(
                 createError(
                     401,
                     "All input fields required"
                 )
             );
+
         }
 
-        const userExists = await User.findOne({
-            email,
-        });
+        const userExists =
+            await User.findOne({
+                email,
+            });
 
         if (userExists) {
+
             return res.status(401).json({
+
                 success: false,
-                message: "Email already exists",
+
+                message:
+                    "Email already exists",
+
             });
+
         }
 
         const user = new User({
+
             name,
+
             email,
+
             password,
+
             avatar: {
+
                 public_id: email,
+
                 secure_url:
                     "https://cdn.pixabay.com/photo/2015/10/05/22/37/blank-profile-picture-973460_640.png",
+
             },
+
         });
 
         try {
+
             await user.validate();
+
         } catch (error) {
+
             const validationErrors = [];
 
             for (const key in error.errors) {
+
                 validationErrors.push(
                     error.errors[key].message
                 );
+
             }
 
             return res.status(400).json({
+
                 success: false,
+
                 message:
-                    validationErrors.join(
-                        ", "
-                    ),
+                    validationErrors.join(", "),
+
             });
+
         }
 
         if (req.file) {
+
             try {
+
                 const result =
-                    await streamUpload(
-                        req.file.buffer
+                    await uploadImage(
+                        req.file.path
                     );
 
+                fs.rmSync(req.file.path);
+
                 if (result) {
+
                     user.avatar.public_id =
                         result.public_id;
 
                     user.avatar.secure_url =
                         result.secure_url;
+
                 }
+
             } catch (error) {
+
                 return next(
                     createError(
                         500,
@@ -106,34 +156,58 @@ export const signup = async (req, res, next) => {
                         "file not uploaded"
                     )
                 );
+
             }
+
         }
 
         await user.save();
 
-        user.password = undefined;
+        user.password =
+            undefined;
 
         const token =
             await user.generateToken();
 
-            res.cookie("token", token, {
-                httpOnly: true,
-                secure: true,
-                sameSite: "none",
-                maxAge:
-                    7 * 24 * 60 * 60 * 1000,
-            });
+        res.cookie("token", token, {
+
+            httpOnly: true,
+
+            secure: true,
+
+            sameSite: "none",
+
+            maxAge:
+                7 *
+                24 *
+                60 *
+                60 *
+                1000,
+
+        });
+
         res.status(201).json({
+
             success: true,
+
             message:
                 "User created Successfully",
+
             user,
+
         });
+
     } catch (error) {
+
         return next(
-            createError(500, error.message)
+            createError(
+                500,
+                error.message
+            )
         );
+
     }
+
 };
 
 export const login = async (
@@ -141,17 +215,26 @@ export const login = async (
     res,
     next
 ) => {
-    try {
-        const { email, password } =
-            req.body;
 
-        if (!email || !password) {
+    try {
+
+        const {
+            email,
+            password
+        } = req.body;
+
+        if (
+            !email ||
+            !password
+        ) {
+
             return next(
                 createError(
                     401,
                     "All input fields required"
                 )
             );
+
         }
 
         const userData =
@@ -160,12 +243,14 @@ export const login = async (
             }).select("+password");
 
         if (!userData) {
+
             return next(
                 createError(
                     404,
                     "User not found"
                 )
             );
+
         }
 
         const comparePassword =
@@ -175,36 +260,61 @@ export const login = async (
             );
 
         if (!comparePassword) {
+
             return next(
                 createError(
                     401,
                     "Invalid email or password"
                 )
             );
+
         }
 
         const token =
             await userData.generateToken();
 
-        userData.password = undefined;
+        userData.password =
+            undefined;
 
         res.cookie("token", token, {
+
             httpOnly: true,
+
             secure: true,
+
             sameSite: "none",
+
             maxAge:
-                7 * 24 * 60 * 60 * 1000,
+                7 *
+                24 *
+                60 *
+                60 *
+                1000,
+
         });
+
         res.status(200).json({
+
             success: true,
-            message: `Welcome back ${userData.name}`,
+
+            message:
+                `Welcome back ${userData.name}`,
+
             userData,
+
         });
+
     } catch (error) {
+
         return next(
-            createError(500, error.message)
+            createError(
+                500,
+                error.message
+            )
         );
+
     }
+
 };
 
 export const logout = (
@@ -212,22 +322,38 @@ export const logout = (
     res,
     next
 ) => {
+
     try {
-        res.cookie("token", null, {
-            httpOnly: true,
-            maxAge: 0,
-        });
+
+        res.cookie(
+            "token",
+            null,
+            {
+                httpOnly: true,
+                maxAge: 0,
+            }
+        );
 
         res.status(200).json({
+
             success: true,
+
             message:
                 "User logout successfully",
+
         });
+
     } catch (error) {
+
         return next(
-            createError(500, error.message)
+            createError(
+                500,
+                error.message
+            )
         );
+
     }
+
 };
 
 export const getProfile = async (
@@ -235,20 +361,33 @@ export const getProfile = async (
     res,
     next
 ) => {
+
     try {
-        const user = await User.findById(
-            req.user.id
-        );
+
+        const user =
+            await User.findById(
+                req.user.id
+            );
 
         res.status(200).json({
+
             success: true,
+
             user,
+
         });
+
     } catch (error) {
+
         return next(
-            createError(500, error.message)
+            createError(
+                500,
+                error.message
+            )
         );
+
     }
+
 };
 
 export const forgotPassword =
@@ -257,16 +396,21 @@ export const forgotPassword =
         res,
         next
     ) => {
+
         try {
-            const { email } = req.body;
+
+            const { email } =
+                req.body;
 
             if (!email) {
+
                 return next(
                     createError(
                         400,
                         "Email is required"
                     )
                 );
+
             }
 
             const user =
@@ -275,12 +419,14 @@ export const forgotPassword =
                 });
 
             if (!user) {
+
                 return next(
                     createError(
                         404,
                         "User not found"
                     )
                 );
+
             }
 
             const resetToken =
@@ -289,6 +435,7 @@ export const forgotPassword =
             await user.save();
 
             const resetPasswordUrl =
+
                 `${process.env.FRONTEND_URL}/reset-password/${resetToken}`;
 
             const subject =
@@ -300,22 +447,37 @@ export const forgotPassword =
             `;
 
             await sendMail(
+
                 process.env.GMAIL_ID,
+
                 email,
+
                 subject,
+
                 message
+
             );
 
             res.status(200).json({
+
                 success: true,
+
                 message:
                     "Reset password mail sent",
+
             });
+
         } catch (error) {
+
             return next(
-                createError(500, error.message)
+                createError(
+                    500,
+                    error.message
+                )
             );
+
         }
+
     };
 
 export const resetPassword = async (
@@ -323,7 +485,9 @@ export const resetPassword = async (
     res,
     next
 ) => {
+
     try {
+
         const { resetToken } =
             req.params;
 
@@ -338,23 +502,29 @@ export const resetPassword = async (
 
         const user =
             await User.findOne({
+
                 forgotPasswordToken,
+
                 forgotPasswordExpiry:
-                    {
-                        $gt: Date.now(),
-                    },
+                {
+                    $gt: Date.now(),
+                },
+
             });
 
         if (!user) {
+
             return next(
                 createError(
                     400,
                     "Token invalid or expired"
                 )
             );
+
         }
 
-        user.password = password;
+        user.password =
+            password;
 
         user.forgotPasswordToken =
             undefined;
@@ -365,15 +535,25 @@ export const resetPassword = async (
         await user.save();
 
         res.status(200).json({
+
             success: true,
+
             message:
                 "Password reset successfully",
+
         });
+
     } catch (error) {
+
         return next(
-            createError(500, error.message)
+            createError(
+                500,
+                error.message
+            )
         );
+
     }
+
 };
 
 export const changePassword = async (
@@ -381,7 +561,9 @@ export const changePassword = async (
     res,
     next
 ) => {
+
     try {
+
         const {
             oldPassword,
             newPassword,
@@ -393,12 +575,14 @@ export const changePassword = async (
             ).select("+password");
 
         if (!user) {
+
             return next(
                 createError(
                     404,
                     "User not found"
                 )
             );
+
         }
 
         const isMatch =
@@ -408,28 +592,41 @@ export const changePassword = async (
             );
 
         if (!isMatch) {
+
             return next(
                 createError(
                     401,
                     "Old password incorrect"
                 )
             );
+
         }
 
-        user.password = newPassword;
+        user.password =
+            newPassword;
 
         await user.save();
 
         res.status(200).json({
+
             success: true,
+
             message:
                 "Password changed successfully",
+
         });
+
     } catch (error) {
+
         return next(
-            createError(500, error.message)
+            createError(
+                500,
+                error.message
+            )
         );
+
     }
+
 };
 
 export const updateProfile = async (
@@ -437,8 +634,11 @@ export const updateProfile = async (
     res,
     next
 ) => {
+
     try {
-        const { name } = req.body;
+
+        const { name } =
+            req.body;
 
         const user =
             await User.findById(
@@ -446,19 +646,24 @@ export const updateProfile = async (
             );
 
         if (!user) {
+
             return next(
                 createError(
                     404,
                     "User not found"
                 )
             );
+
         }
 
         if (name) {
+
             user.name = name;
+
         }
 
         if (req.file) {
+
             await cloudinary.uploader.destroy(
                 user.avatar.public_id,
                 {
@@ -468,29 +673,42 @@ export const updateProfile = async (
             );
 
             const result =
-                await streamUpload(
-                    req.file.buffer
+                await uploadImage(
+                    req.file.path
                 );
+
+            fs.rmSync(req.file.path);
 
             user.avatar.public_id =
                 result.public_id;
 
             user.avatar.secure_url =
                 result.secure_url;
+
         }
 
         await user.save();
 
         res.status(200).json({
+
             success: true,
+
             message:
                 "Profile updated successfully",
+
         });
+
     } catch (error) {
+
         return next(
-            createError(500, error.message)
+            createError(
+                500,
+                error.message
+            )
         );
+
     }
+
 };
 
 export const deleteProfile = async (
@@ -498,19 +716,23 @@ export const deleteProfile = async (
     res,
     next
 ) => {
+
     try {
+
         const user =
             await User.findByIdAndDelete(
                 req.user.id
             );
 
         if (!user) {
+
             return next(
                 createError(
                     404,
                     "User not found"
                 )
             );
+
         }
 
         await cloudinary.uploader.destroy(
@@ -522,13 +744,23 @@ export const deleteProfile = async (
         );
 
         res.status(200).json({
+
             success: true,
+
             message:
                 "Profile deleted successfully",
+
         });
+
     } catch (error) {
+
         return next(
-            createError(500, error.message)
+            createError(
+                500,
+                error.message
+            )
         );
+
     }
+
 };
